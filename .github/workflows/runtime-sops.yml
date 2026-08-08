@@ -1,0 +1,58 @@
+name: runtime-generated SOPS fixture
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-sops-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: host contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout fixture
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install age runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends age
+
+      - name: Install pinned SOPS and just
+        shell: bash
+        run: sudo bash scripts/install-tools.sh /usr/local/bin
+
+      - name: Run shared host contract
+        shell: bash
+        run: just verify
+
+  container:
+    name: container contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout fixture
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build clean fixture image
+        shell: bash
+        run: docker build --tag sops-just-runtime-fixture .
+
+      - name: Run shared container contract
+        shell: bash
+        run: docker run --rm sops-just-runtime-fixture
