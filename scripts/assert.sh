@@ -62,12 +62,18 @@ ok "tracked content contains no private age identity"
 if ! git ls-files -z | python3 -c '
 import sys
 paths = [p.decode("utf-8", "surrogateescape") for p in sys.stdin.buffer.read().split(b"\0") if p]
-bad = [p for p in paths if p.endswith(".env") or "/.env." in p or p.startswith(".env.")]
+approved = {"env/enc/dev.env.enc", "env/enc/prod.env.enc"}
+bad = []
+for path in paths:
+    name = path.rsplit("/", 1)[-1]
+    dotenv_like = name == ".env" or name.startswith(".env.") or name.endswith(".env") or ".env." in name
+    if dotenv_like and path not in approved:
+        bad.append(path)
 raise SystemExit(1 if bad else 0)
 '; then
-  fail "tracked plaintext dotenv path exists"
+  fail "tracked plaintext dotenv-like path exists"
 fi
-ok "tracked tree has no plaintext dotenv path"
+ok "tracked tree has no plaintext dotenv-like path"
 
 encrypt_fixture() {
   local env_name="$1"
