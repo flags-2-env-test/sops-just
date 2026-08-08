@@ -1,35 +1,29 @@
 # sops-just
 
-sops environment fixture for the toolchain combination: **sops + just (no nix)**.
+Reference fixture for the ORESoftware SOPS environment contract using **SOPS + age + just** without Nix.
 
-Part of a matrix that proves the sops `env/enc` ↔ `env/dec` pattern behaves
-identically across toolchains **and** on both sides of a container boundary.
-Same contract in every fixture (`scripts/assert.sh`); only the surrounding
-tooling differs.
+This fixture intentionally has **no committed private identity and no committed ciphertext**. Every test run generates a fresh age identity under a private temporary directory, derives its public recipient, generates dummy dev/prod SOPS ciphertext at the canonical paths, validates decryption and the root `.env` symlink contract, then removes all runtime state.
 
-## Why the container half matters
+The same contract runs on the GitHub Actions host and inside a clean container. This gives real encryption/decryption coverage without teaching a test-only exception to the production rule that private identities never belong in Git.
 
-Every defect this pattern has actually shipped was invisible from one side:
+## Contract exercised
 
-| Defect | Visible from |
-|---|---|
-| `dd … status=none` is GNU-only, so the secure overwrite silently no-opped | Linux only |
-| `python3` missing from the nix devshell | inside `nix develop` only |
-| k8s Secret named from `basename(pwd)` → `w-local` under a `/w` mount | container only |
-| `sops exec-env` needs `/bin/sh`, so it cannot run on distroless | container only |
+- plaintext dotenv paths are ignored everywhere;
+- only `env/enc/dev.env.enc` and `env/enc/prod.env.enc` are allowlisted ciphertext paths;
+- `.env.enc` operations force SOPS dotenv input/output types and use filename override for creation-rule selection;
+- decrypted files live only under ignored `env/dec/`, mode `0600`;
+- root `.env` is an ignored relative symlink and unmanaged root `.env` files are refused;
+- a fresh/no-identity decrypt attempt fails;
+- generated identities, decrypted values, and helper state are not tracked or emitted as artifacts;
+- the host and container execute the same `scripts/assert.sh` contract.
 
-So each fixture asserts on the host **and** in Docker, and CI runs both.
+All values in `fixtures/*.fixture.dotenv` are synthetic test data.
 
-## Run it
+## Run
 
 ```sh
-just verify                 # host
-docker build -t sops-just . && docker run --rm sops-just   # container
+just verify
+just verify-docker
 ```
 
-## The committed key is intentional
-
-`age.key` is a **throwaway** private key, committed so CI can decrypt with zero
-secrets configured. Every value it protects is fake. It exists to make the e2e
-real; never reuse it. In a production repo the private key is never committed —
-see the recipient-roster model in `.sops.yaml`.
+Tracking: DEN-2919 / DEN-2636.
